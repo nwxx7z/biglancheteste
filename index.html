@@ -1952,10 +1952,18 @@ textarea{resize:vertical;min-height:76px}
           </label>
 
           <label class="cidade-opcao">
+            <input type="radio" name="cidade-entrega" value="Japaratinga" data-fee="10">
+            <span class="cidade-info">
+              <strong>Japaratinga</strong>
+              <small>+ R$ 10,00</small>
+            </span>
+          </label>
+
+          <label class="cidade-opcao">
             <input type="radio" name="cidade-entrega" value="Bairro Salgado depois do resort" data-fee="5">
             <span class="cidade-info">
               <strong>Bairro Salgado depois do resort</strong>
-              <small>+ R$ 15,00</small>
+              <small>+ R$ 5,00</small>
             </span>
           </label>
         </div>
@@ -2113,6 +2121,7 @@ const unit = l => Number(l.p || 0) + l.adds.reduce((a,x) => a + Number(x[1] || 0
 const CIDADES_ENTREGA = {
   "São Bento": 4,
   "Maragogi": 10,
+  "Japaratinga": 10,
   "Bairro Salgado depois do resort": 5
 };
 
