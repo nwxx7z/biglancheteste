@@ -256,13 +256,16 @@ function card(o){
   }).join("");
   const time=pedidoTime(o.createdAt);
   const isReady=o.status==="ready";
+  const awaiting=o.status==="awaiting_whatsapp";
   const actions=isReady
     ? `<button onclick="setStatus('${esc(o.id)}','preparing')">↩️ Voltar para pedidos</button><button class="danger-action" onclick="deleteOrder('${esc(o.id)}')">🗑️ Excluir</button>`
-    : `<button class="primary" onclick="printOrder('${esc(o.id)}')">🖨️ Imprimir</button><button onclick="setStatus('${esc(o.id)}','preparing')">Em preparo</button><button onclick="setStatus('${esc(o.id)}','ready')">Pronto</button><button class="danger-action" onclick="deleteOrder('${esc(o.id)}')">🗑️ Excluir</button>`;
+    : awaiting
+      ? `<button disabled title="Aguardando confirmação de entrega pelo WhatsApp da empresa">⏳ Aguardando WhatsApp</button><button class="danger-action" onclick="deleteOrder('${esc(o.id)}')">🗑️ Excluir</button>`
+      : `<button class="primary" onclick="printOrder('${esc(o.id)}')">🖨️ Imprimir</button><button onclick="setStatus('${esc(o.id)}','preparing')">Em preparo</button><button onclick="setStatus('${esc(o.id)}','ready')">Pronto</button><button class="danger-action" onclick="deleteOrder('${esc(o.id)}')">🗑️ Excluir</button>`;
   return `<article class="order ${o.status==="new"?"new":""}">
     <div class="order-head">
       <div><div class="number">Pedido #${esc(o.number)}</div>${time?`<div class="order-time">Feito às ${time}</div>`:""}</div>
-      <span class="badge ${o.status==="printed"?"printed":"new"}">${isReady?"Pronto":o.status==="printed"?"Impresso":o.status==="preparing"?"Em preparo":"Novo"}</span>
+      <span class="badge ${o.status==="printed"?"printed":"new"}">${isReady?"Pronto":o.status==="awaiting_whatsapp"?"Aguardando WhatsApp":o.status==="printed"?"Impresso":o.status==="preparing"?"Em preparo":"Novo"}</span>
     </div>
     ${items}
     <div class="meta">
