@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BIG LANCHE — Cozinha</title>
+<script src="https://cdn.jsdelivr.net/npm/qz-tray/qz-tray.js"></script>
+<style>
+:root{--bg:#f3eee8;--card:#fffaf5;--ink:#2c211a;--muted:#7a6b61;--line:#dfd3c8;--accent:#5f493a;--ok:#4f7b5c;--warn:#b77932;--danger:#a6473d}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 Arial,sans-serif}
+header{position:sticky;top:0;z-index:5;background:#fffaf5eF;border-bottom:1px solid var(--line);padding:14px 18px}
+.head{max-width:1100px;margin:auto;display:flex;justify-content:space-between;align-items:center;gap:12px}h1{font-size:1.1rem;margin:0}
+.status{color:var(--muted);font-size:.85rem}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#999;margin-right:6px}.dot.ok{background:var(--ok)}
+main{max-width:1100px;margin:20px auto;padding:0 14px 40px}.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+button{border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:#fff;cursor:pointer}button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.orders{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}.order{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:15px;box-shadow:0 4px 15px #3223190e}.order.new{box-shadow:0 0 0 2px #b779322b,0 6px 18px #32231914}
+.order-head{display:flex;justify-content:space-between;align-items:center}.number{font-weight:800;font-size:1.15rem}.badge{padding:4px 8px;border-radius:999px;font-size:.72rem;font-weight:700;background:#eadfd4}.badge.new{background:#f3dfc2}.badge.printed{background:#dcebdd}
+.item{padding:9px 0;border-bottom:1px solid var(--line)}.item-name{font-weight:800}.add{padding-left:10px;color:var(--muted);font-size:.88rem}.item-note{margin-top:5px;padding-left:10px;color:var(--warn);font-size:.88rem}.meta{border-top:1px solid var(--line);margin-top:10px;padding-top:10px;display:grid;gap:5px}.total{font-size:1.08rem;font-weight:900;margin-top:10px}.actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:13px}.empty{text-align:center;padding:36px;color:var(--muted)}
+.tabs{max-width:1100px;margin:14px auto 0;display:flex;gap:8px}.tab{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:9px 14px;font-weight:800;cursor:pointer}.tab.active{background:var(--ink);color:#fff}.tab-count{opacity:.75;margin-left:5px}.order-time{font-size:.82rem;color:var(--muted);margin-top:3px}.add-title{margin-top:6px;font-weight:800;font-size:.84rem;color:var(--ink)}
+@media(max-width:650px){.head{flex-direction:column;align-items:flex-start}.orders{grid-template-columns:1fr}}
+
+.auth-screen{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px}
+.auth-card{width:min(420px,100%);background:var(--card);border:1px solid var(--line);border-radius:18px;padding:26px;box-shadow:0 12px 40px #32231918}
+.auth-card h2{margin:0 0 8px;font-size:1.25rem}.auth-card p{margin:0 0 18px;color:var(--muted)}
+.auth-card input{width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:10px;background:#fff;font:inherit}
+.auth-card button{width:100%;margin-top:12px}.auth-error{min-height:20px;margin-top:10px!important;color:var(--danger)!important;font-size:.88rem}
+.hidden{display:none!important}
+</style>
+
+<script>
+/* BIG LANCHE Printer Bridge
+   O APK expõe window.AndroidPrinter. No navegador normal, mantém o QZ Tray.
+*/
+window.BIGLANCHE_PRINTER = {
+  available: () => !!window.AndroidPrinter,
+  connect: async () => {
+    if (!window.AndroidPrinter) throw new Error("Ponte Android não disponível");
+    const r = window.AndroidPrinter.connectPrinter();
+    return r === undefined ? true : r;
+  },
+  print: async (data) => {
+    if (!window.AndroidPrinter) throw new Error("Ponte Android não disponível");
+    const r = window.AndroidPrinter.printEscPos(String(data));
+    return r === undefined ? true : r;
+  }
+};
+</script>
+
+<style id="kitchen-controls-theme">
+/* Tema da Kitchen */
+html[data-theme="light"]{color-scheme:light!important}
+html[data-theme="dark"]{color-scheme:dark!important}
+
+/* Botão de tema: fica ao lado do status "Pedidos + impressora". */
+.head-actions{display:flex;align-items:center;gap:10px}
+.status{display:flex!important;align-items:center;gap:7px;white-space:nowrap}
+.status .dot{margin-right:0!important}
+.theme-toggle{
+  display:inline-flex!important;align-items:center;justify-content:center;gap:5px;
+  min-height:34px!important;padding:6px 10px!important;
+  border:1px solid #b9aaa0!important;border-radius:999px!important;
+  background:#fffaf5!important;color:#171311!important;
+  cursor:pointer!important;font:800 12px/1 Arial,sans-serif!important;
+  transition:background .18s,border-color .18s,transform .18s!important;
+}
+html[data-theme="light"] .theme-toggle{
+  background:#fffaf5!important;color:#171311!important;border-color:#b9aaa0!important;
+}
+html[data-theme="dark"] .theme-toggle{
+  background:#2b211c!important;color:#fff1d6!important;border-color:#5a4639!important;
+}
+.theme-toggle:hover{background:rgba(255,255,255,.18)!important;transform:translateY(-1px)}
+.theme-icon{font-size:14px;line-height:1}
+.theme-label{font-size:12px}
+
+/* Variáveis reais do site — evita que regras antigas mantenham o claro. */
+html[data-theme="dark"]{
+  --bg:#171311!important;--card:#241c18!important;--ink:#f8eee5!important;
+  --muted:#c7b7aa!important;--line:#4a382e!important;--accent:#80604a!important;
+  --ok:#79a783!important;--warn:#d49a52!important;--danger:#d56a60!important;
+}
+html[data-theme="light"]{
+  --bg:#f3eee8!important;--card:#fffaf5!important;--ink:#2c211a!important;
+  --muted:#7a6b61!important;--line:#dfd3c8!important;--accent:#5f493a!important;
+}
+
+html[data-theme="dark"] body{
+  background:#171311!important;color:#f8eee5!important;
+}
+html[data-theme="dark"] header{
+  background:#211914f2!important;border-bottom-color:#4a382e!important;color:#f8eee5!important;
+}
+html[data-theme="dark"] main,
+html[data-theme="dark"] .tabs{
+  color:#f8eee5!important;
+}
+html[data-theme="dark"] .tabs{
+  background:#211914!important;
+}
+html[data-theme="dark"] .tab,
+html[data-theme="dark"] .toolbar button{
+  background:#2b211c!important;color:#f8eee5!important;border-color:#4a382e!important;
+}
+html[data-theme="dark"] .tab.active{
+  background:#80604a!important;color:#fff!important;border-color:#80604a!important;
+}
+html[data-theme="dark"] .order{
+  background:#241c18!important;color:#f8eee5!important;border-color:#4a382e!important;
+}
+html[data-theme="dark"] .item,
+html[data-theme="dark"] .meta{
+  border-color:#4a382e!important;
+}
+html[data-theme="dark"] .add,
+html[data-theme="dark"] .empty,
+html[data-theme="dark"] .order-time,
+html[data-theme="dark"] .status{
+  color:#c7b7aa!important;
+}
+html[data-theme="dark"] .badge{background:#3b2d25!important;color:#f8eee5!important}
+html[data-theme="dark"] .badge.new{background:#4b3828!important}
+html[data-theme="dark"] .badge.printed{background:#29402e!important}
+html[data-theme="dark"] .auth-screen{background:#171311!important}
+html[data-theme="dark"] .auth-card{background:#241c18!important;color:#f8eee5!important;border-color:#4a382e!important}
+html[data-theme="dark"] .auth-card p{color:#c7b7aa!important}
+html[data-theme="dark"] .auth-card input{background:#1b1512!important;color:#f8eee5!important;border-color:#4a382e!important}
+html[data-theme="dark"] .order-control{
+  border-color:#4b382c!important;background:#30231c!important;color:#fff1d6!important;
+}
+html[data-theme="dark"] #orderControlTitle{color:#fff1d6!important}
+html[data-theme="dark"] .order-control-kicker,
+html[data-theme="dark"] #orderControlHint{color:#cdb9ac!important}
+html[data-theme="dark"] .order-mode{
+  background:#2b2019!important;color:#fff1d6!important;border-color:#4b382c!important;
+}
+html[data-theme="dark"] .order-mode.active{
+  background:#6a4c38!important;border-color:#6a4c38!important;color:#fff!important;
+}
+
+.order-control{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  margin:0 0 18px;padding:14px 16px;border:1px solid #e4d8cd;
+  border-radius:18px;background:#fffdf9;color:#2b201a;
+  box-shadow:0 8px 22px rgba(43,32,26,.06);
+}
+.order-control-info{min-width:0}
+.order-control-kicker{display:block;margin-bottom:3px;color:#786b62;font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+#orderControlTitle{display:block;color:#2b201a;font-size:1rem}
+#orderControlHint{display:block;margin-top:3px;color:#786b62;font-size:.8rem}
+.order-mode-buttons{display:flex;gap:7px}
+.order-mode{min-height:40px;padding:9px 12px;border:1px solid #e4d8cd;border-radius:11px;background:#f9f4ee;color:#2b201a;font-weight:800;cursor:pointer}
+.order-mode.active{background:#5c4333;border-color:#5c4333;color:#fff}
+.order-mode:disabled{opacity:.55;cursor:wait}
+#autoPrintToggle{font-weight:800}
+.danger-action{color:var(--danger)!important;border-color:#e3c7c2!important;background:#fff8f6!important;font-weight:800}
+html[data-theme="dark"] .danger-action{color:#ffb5aa!important;border-color:#65423b!important;background:#30211d!important}
+#autoPrintToggle.auto-print-on{border-color:#5f493a;color:#5f493a}
+#autoPrintToggle.auto-print-off{opacity:.78}
+
+@media(max-width:650px){
+  .head{flex-direction:row!important;align-items:center!important}
+  .head-actions{margin-left:auto}
+  .status{font-size:.78rem}
+  .theme-label{display:none}
+  .theme-toggle{width:36px!important;height:34px!important;padding:5px!important}
+  .order-control{flex-direction:column;align-items:stretch}
+  .order-mode-buttons{width:100%;display:grid;grid-template-columns:repeat(3,1fr)}
+  .order-mode{width:100%;padding-left:5px;padding-right:5px;font-size:.76rem}
+}
+</style></head>
+<body>
+<div id="loginScreen" class="auth-screen">
+  <form id="loginForm" class="auth-card">
+    <h2>🔒 Acesso da cozinha</h2>
+    <p>Digite a senha para abrir o painel de pedidos.</p>
+    <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Senha" required>
+    <button class="primary" type="submit">Entrar</button>
+    <p id="loginError" class="auth-error"></p>
+  </form>
+</div>
+<div id="app" class="hidden">
+
+<header><div class="head"><h1>🍔 BIG LANCHE · Cozinha</h1><div class="head-actions"><div class="status"><span id="dot" class="dot"></span><span id="status">Conectando...</span><button id="themeToggle" class="theme-toggle" type="button" aria-label="Claro" title="Claro"><span id="themeIcon">☀️</span><span id="themeLabel">Claro</span></button></div></div></div></header>
+<div class="tabs" role="tablist" aria-label="Pedidos">
+  <button id="tabActive" class="tab active" type="button" role="tab" aria-selected="true">Pedidos <span id="countActive" class="tab-count">0</span></button>
+  <button id="tabReady" class="tab" type="button" role="tab" aria-selected="false">Prontos <span id="countReady" class="tab-count">0</span></button>
+</div>
+<main>
+<div class="toolbar"><button id="autoPrintToggle" type="button" aria-pressed="true">⚡ Impressão automática: ON</button><button class="primary" id="connect">🖨️ Conectar impressora</button><button id="refresh">Atualizar</button><button id="logout">Sair</button></div>
+<div class="order-control" id="orderControl"><div class="order-control-info"><span class="order-control-kicker">Status dos pedidos</span><strong id="orderControlTitle">Automático</strong><small id="orderControlHint">17:30 às 23:45 · Brasília</small></div><div class="order-mode-buttons" role="group" aria-label="Controle de pedidos"><button type="button" class="order-mode active" data-order-mode="auto">◷ Automático</button><button type="button" class="order-mode" data-order-mode="open">Aberto</button><button type="button" class="order-mode" data-order-mode="closed">Fechado</button></div></div>
+<div id="orders" class="orders"><div class="empty">Nenhum pedido.</div></div>
+</main>
+<script>
+const API_URL=location.origin, PRINT_PRINTER="";
+let qzReady=false, orders=[], authenticated=false, currentTab="active";
+let autoPrintSeen=new Set();
+let autoPrintBusy=new Set();
+let autoPrintEnabled=true;
+const autoPrintStorageKey="big-lanche-auto-print-v1";
+let orderMode="auto";
+let orderModeTimer=null;
+const $=s=>document.querySelector(s);
+const money=v=>Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+const printSafe=s=>String(s??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\x20-\x7E\n\r]/g,"");
+function status(t,ok=false){$("#status").textContent=t;$("#dot").className="dot "+(ok?"ok":"");}
+function showLogin(message=""){authenticated=false;$("#app").classList.add("hidden");$("#loginScreen").classList.remove("hidden");$("#loginError").textContent=message;setTimeout(()=>$("#loginPassword").focus(),0)}
+function showApp(){authenticated=true;$("#loginScreen").classList.add("hidden");$("#app").classList.remove("hidden")}
+async function api(p,o={}){const r=await fetch(API_URL+p,{cache:"no-store",credentials:"same-origin",...o,headers:{"Content-Type":"application/json",...(o.headers||{})}});if(r.status===401){showLogin("Sua sessão expirou. Entre novamente.");throw Error("AUTH_REQUIRED")}if(!r.ok)throw Error(await r.text());return r.json();}
+async function checkAuth(){try{const r=await fetch(API_URL+"/api/auth",{cache:"no-store",credentials:"same-origin"});if(r.ok){showApp();return true}}catch(e){}showLogin();return false}
+async function doLogin(password){const r=await fetch(API_URL+"/api/auth",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({password})});if(!r.ok){let msg="Senha incorreta";try{msg=(await r.json()).error||msg}catch(e){}throw Error(msg)}showApp();await load();}
+async function doLogout(){try{await fetch(API_URL+"/api/auth",{method:"DELETE",credentials:"same-origin"})}catch(e){}showLogin();}
+async function connectPrinter(){
+  try{
+    if(window.BIGLANCHE_PRINTER.available()){
+      await window.BIGLANCHE_PRINTER.connect();
+      qzReady=false;
+      status("Impressora Android conectada",true);
+      return;
+    }
+    if(!window.qz)throw Error("QZ Tray não carregado");
+    if(!qz.websocket.isActive())await qz.websocket.connect();
+    const p=PRINT_PRINTER||await qz.printers.getDefault();
+    if(!p)throw Error("Sem impressora");
+    qzReady=true;
+    status("Impressora: "+p,true);
+  }catch(e){
+    qzReady=false;
+    status("Impressora não conectada");
+    alert(e.message);
+  }
+}
+function pedidoTime(value){
+  if(!value) return "";
+  const d = new Date(value);
+  if(Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("pt-BR",{hour:"2-digit",minute:"2-digit"}).format(d);
+}
+function setTab(tab){
+  currentTab=tab;
+  const active=tab==="active";
+  $("#tabActive").classList.toggle("active",active);
+  $("#tabReady").classList.toggle("active",!active);
+  $("#tabActive").setAttribute("aria-selected",String(active));
+  $("#tabReady").setAttribute("aria-selected",String(!active));
+  render();
+}
+function card(o){
+  const items=(o.cart||[]).map(i=>{
+    const adds=(i.additions||[]);
+    return `<div class="item">
+      <div class="item-name">${i.quantity}x ${esc(i.name)}</div>
+      ${adds.length?`<div class="add-title">Adicionais:</div>${adds.map(a=>`<div class="add">+ ${a.quantity||1}x ${esc(a.name)}</div>`).join("")}`:""}
+      ${i.note?`<div class="item-note"><b>Obs.:</b> ${esc(i.note)}</div>`:""}
+    </div>`;
+  }).join("");
+  const time=pedidoTime(o.createdAt);
+  const isReady=o.status==="ready";
+  const actions=isReady
+    ? `<button onclick="setStatus('${esc(o.id)}','preparing')">↩️ Voltar para pedidos</button><button class="danger-action" onclick="deleteOrder('${esc(o.id)}')">🗑️ Excluir</button>`
+    : `<button class="primary" onclick="printOrder('${esc(o.id)}')">🖨️ Imprimir</button><button onclick="setStatus('${esc(o.id)}','preparing')">Em preparo</button><button onclick="setStatus('${esc(o.id)}','ready')">Pronto</button><button class="danger-action" onclick="deleteOrder('${esc(o.id)}')">🗑️ Excluir</button>`;
+  return `<article class="order ${o.status==="new"?"new":""}">
+    <div class="order-head">
+      <div><div class="number">Pedido #${esc(o.number)}</div>${time?`<div class="order-time">Feito às ${time}</div>`:""}</div>
+      <span class="badge ${o.status==="printed"?"printed":"new"}">${isReady?"Pronto":o.status==="printed"?"Impresso":o.status==="preparing"?"Em preparo":"Novo"}</span>
+    </div>
+    ${items}
+    <div class="meta">
+      <div><b>Entrega:</b> ${esc(o.delivery?.city||"")} ${o.delivery?.fee? "· "+money(o.delivery.fee):""}</div>
+      <div><b>Endereço:</b> ${esc(o.delivery?.address||"")}</div>
+      <div><b>Pagamento:</b> ${esc(o.payment||"")}</div>
+      ${o.notes?`<div><b>Obs.:</b> ${esc(o.notes)}</div>`:""}
+    </div>
+    <div class="total">Total: ${money(o.total)}</div>
+    <div class="actions">${actions}</div>
+  </article>`;
+}
+function render(){
+  const activeOrders=orders.filter(o=>o.status!=="ready");
+  const readyOrders=orders.filter(o=>o.status==="ready");
+  $("#countActive").textContent=activeOrders.length;
+  $("#countReady").textContent=readyOrders.length;
+  const list=currentTab==="ready"?readyOrders:activeOrders;
+  $("#orders").innerHTML=list.length
+    ? list.slice().sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt)).reverse().map(card).join("")
+    : `<div class="empty">${currentTab==="ready"?"Nenhum pedido pronto.":"Nenhum pedido em andamento."}</div>`;
+}
+function receipt(o){const line="-".repeat(42),a=["\x1B\x40","\x1B\x61\x01","\x1B\x45\x01","BIG LANCHE","PEDIDO #"+o.number,"\x1B\x45\x00",line,"\x1B\x61\x00"];for(const i of o.cart||[]){a.push(`${i.quantity}x ${printSafe(i.name)}`);for(const x of i.additions||[])a.push(`   + ${x.quantity||1}x ${printSafe(x.name)}`);if(i.note)a.push(`   OBS: ${printSafe(i.note)}`)}a.push(line,`Entrega: ${printSafe(o.delivery?.city)} ${o.delivery?.fee?money(o.delivery.fee):""}`,`Endereco: ${printSafe(o.delivery?.address)}`,`Pagamento: ${printSafe(o.payment)}`,o.notes?`Obs: ${printSafe(o.notes)}`:"",`TOTAL: ${money(o.total)}`,"","","","\x1D\x56\x00");return a.join("\n");}
+async function printOrder(id,automatic=false){
+  const o=orders.find(x=>x.id===id);
+  if(!o)return;
+  const raw=receipt(o);
+  try{
+    if(window.BIGLANCHE_PRINTER.available()){
+      const sent=await window.BIGLANCHE_PRINTER.print(raw);
+      if(!sent) throw Error("Impressora não respondeu");
+      await setStatus(id,"printed");
+      if(automatic) status("Pedido #"+o.number+" impresso automaticamente",true);
+      return true;
+    }
+    if(!qzReady){browserPrint(o);return}
+    const p=PRINT_PRINTER||await qz.printers.getDefault(),
+          c=qz.configs.create(p,{jobName:`BIG LANCHE Pedido #${o.number}`});
+    await qz.print(c,[{type:"raw",format:"command",flavor:"plain",data:raw}]);
+    await setStatus(id,"printed");
+    return true;
+  }catch(e){
+    if(!automatic) alert("Falha na impressão: "+e.message);
+    return false;
+  }
+}
+function browserPrint(o){const w=window.open("","_blank","width=420,height=700");if(!w)return;w.document.write(`<style>body{font:14px monospace;width:80mm;margin:0;padding:5mm}.i{font-weight:700;margin:6px 0}.a{padding-left:10px}.t{font-size:18px;font-weight:900;margin-top:12px}</style><h2>BIG LANCHE<br>Pedido #${esc(o.number)}</h2>${(o.cart||[]).map(i=>`<div class=i>${i.quantity}x ${esc(i.name)}${(i.additions||[]).map(a=>`<div class=a>+ ${a.quantity||1}x ${esc(a.name)}</div>`).join("")}${i.note?`<div class=a><b>Obs.:</b> ${esc(i.note)}</div>`:""}</div>`).join("")}<hr>Entrega: ${esc(o.delivery?.city)}<br>Endereco: ${esc(o.delivery?.address)}<br>Pagamento: ${esc(o.payment)}<div class=t>TOTAL: ${money(o.total)}</div><script>window.print()<\/script>`);w.document.close();}
+async function setStatus(id,s){await api("/api/orders/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify({status:s})});const o=orders.find(x=>x.id===id);if(o)o.status=s;render();}
+async function deleteOrder(id){
+  const o=orders.find(x=>x.id===id);
+  if(!o)return;
+  const number=o.number?String(o.number):id;
+  if(!confirm("Excluir o pedido #"+number+"?\\n\\nEssa ação não pode ser desfeita."))return;
+  try{
+    await api("/api/orders/"+encodeURIComponent(id),{method:"DELETE"});
+    orders=orders.filter(x=>x.id!==id);
+    autoPrintSeen.delete(id);
+    autoPrintBusy.delete(id);
+    render();
+    status("Pedido #"+number+" excluído",true);
+  }catch(e){
+    if(e.message!=="AUTH_REQUIRED")alert("Não foi possível excluir o pedido: "+e.message);
+  }
+}
+function loadAutoPrintSetting(){try{const v=localStorage.getItem(autoPrintStorageKey);autoPrintEnabled=v===null?true:v==="1"}catch(e){autoPrintEnabled=true}renderAutoPrintToggle()}
+function renderAutoPrintToggle(){const b=$("#autoPrintToggle");if(!b)return;b.classList.toggle("auto-print-on",autoPrintEnabled);b.classList.toggle("auto-print-off",!autoPrintEnabled);b.setAttribute("aria-pressed",String(autoPrintEnabled));b.textContent=autoPrintEnabled?"⚡ Impressão automática: ON":"⚡ Impressão automática: OFF"}
+function toggleAutoPrint(){autoPrintEnabled=!autoPrintEnabled;try{localStorage.setItem(autoPrintStorageKey,autoPrintEnabled?"1":"0")}catch(e){}renderAutoPrintToggle();if(!autoPrintEnabled)autoPrintBusy.clear();status(autoPrintEnabled?"Impressão automática ativada":"Impressão automática desativada",true);if(autoPrintEnabled)load()}
+function modeLabel(mode){return mode==="open"?"Aberto":mode==="closed"?"Fechado":"Automático"}
+function updateOrderModeUI(data){const mode=String(data?.mode||"auto"),openNow=!!data?.open;orderMode=mode;document.querySelectorAll("[data-order-mode]").forEach(b=>b.classList.toggle("active",b.dataset.orderMode===mode));const title=$("#orderControlTitle"),hint=$("#orderControlHint");if(title)title.textContent=modeLabel(mode);if(hint)hint.textContent=mode==="auto"?(openNow?"Aberto agora · horário automático 17:30–23:45":"Fechado pelo horário · abre às 17:30"):mode==="open"?"Aberto manualmente · ignora o horário":"Fechado manualmente · ignora o horário"}
+async function loadOrderMode(){try{return updateOrderModeUI(await api("/api/store-status"))}catch(e){return null}}
+async function setOrderMode(mode){if(!["auto","open","closed"].includes(mode))return;document.querySelectorAll("[data-order-mode]").forEach(b=>b.disabled=true);try{const data=await api("/api/store-status",{method:"PATCH",body:JSON.stringify({mode})});updateOrderModeUI(data);status(mode==="open"?"Pedidos liberados":mode==="closed"?"Pedidos fechados":"Horário automático 17:30–23:45 ativado",true)}catch(e){if(e.message!=="AUTH_REQUIRED")alert("Não foi possível alterar o status dos pedidos: "+e.message)}finally{document.querySelectorAll("[data-order-mode]").forEach(b=>b.disabled=false)}}
+function startOrderModePolling(){if(orderModeTimer)clearInterval(orderModeTimer);orderModeTimer=setInterval(loadOrderMode,30000)}
+async function load(){try{
+  const previous=orders;
+  orders=await api("/api/orders");
+  status(qzReady||window.BIGLANCHE_PRINTER?.available()?"Pedidos + impressora":"Pedidos conectados",true);
+  render();
+  if(autoPrintEnabled && window.BIGLANCHE_PRINTER?.available()){
+    for(const o of orders){
+      if(o.status!=="new" || autoPrintSeen.has(o.id) || autoPrintBusy.has(o.id)) continue;
+      autoPrintBusy.add(o.id);
+      try{
+        const ok=await printOrder(o.id,true);
+        if(ok) autoPrintSeen.add(o.id);
+      }catch(e){}
+      finally{autoPrintBusy.delete(o.id);}
+    }
+  }
+}catch{status("Servidor offline");}}
+$("#connect").onclick=connectPrinter;$("#refresh").onclick=load;$("#logout").onclick=doLogout;$("#autoPrintToggle").onclick=toggleAutoPrint;document.querySelectorAll("[data-order-mode]").forEach(b=>b.addEventListener("click",()=>setOrderMode(b.dataset.orderMode)));loadAutoPrintSetting();$("#loginForm").addEventListener("submit",async e=>{e.preventDefault();const b=$("#loginForm button");const p=$("#loginPassword").value.trim();if(!p)return;$("#loginError").textContent="";b.disabled=true;try{await doLogin(p);$("#loginPassword").value=""}catch(err){$("#loginError").textContent=err.message||"Senha incorreta";$("#loginPassword").select()}finally{b.disabled=false}});checkAuth().then(ok=>{if(ok){load();loadOrderMode();startOrderModePolling()}});setInterval(()=>{if(authenticated)load()},2500);$("#tabActive").onclick=()=>setTab("active");$("#tabReady").onclick=()=>setTab("ready");
+</script>
+</div><script>
+(function(){
+  const root=document.documentElement;
+  const button=document.getElementById("themeToggle");
+  const icon=document.getElementById("themeIcon");
+  const label=document.getElementById("themeLabel");
+  const media=window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  const KEY="biglanche-kitchen-theme";
+
+  function getSaved(){
+    try{
+      const v=localStorage.getItem(KEY);
+      return v==="dark"||v==="light" ? v : null;
+    }catch(e){return null}
+  }
+  function getSystem(){return media&&media.matches?"dark":"light"}
+
+  function apply(theme,save){
+    const mode=theme==="dark"||theme==="light"?theme:getSystem();
+    root.setAttribute("data-theme",mode);
+    const dark=mode==="dark";
+
+    /* O texto sempre representa o modo ATUAL. */
+    if(icon) icon.textContent=dark?"☀️":"🌙";
+    if(label) label.textContent=dark?"Escuro":"Claro";
+    if(button){
+      button.title=dark?"Escuro":"Claro";
+      button.setAttribute("aria-label",dark?"Escuro":"Claro");
+      button.dataset.theme=mode;
+    }
+
+    if(save){
+      try{localStorage.setItem(KEY,mode)}catch(e){}
+    }
+  }
+
+  apply(getSaved()||getSystem(),false);
+
+  if(button){
+    button.addEventListener("click",function(){
+      const current=root.getAttribute("data-theme")||getSystem();
+      apply(current==="dark"?"light":"dark",true);
+    });
+  }
+
+  if(media){
+    const changed=function(){
+      /* Se o usuário nunca escolheu manualmente, acompanha o sistema. */
+      if(!getSaved()) apply(getSystem(),false);
+    };
+    if(media.addEventListener) media.addEventListener("change",changed);
+    else if(media.addListener) media.addListener(changed);
+  }
+})();
+</script></body>
+</html>

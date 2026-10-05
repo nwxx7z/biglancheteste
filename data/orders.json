@@ -1,0 +1,26 @@
+[
+  {
+    "id": "muoak67r-yx8pqu",
+    "number": 1001,
+    "status": "new",
+    "printed": false,
+    "createdAt": "2026-09-30T16:00:05.751Z",
+    "cart": [
+      {
+        "name": "X-Teste",
+        "quantity": 1,
+        "price": 10,
+        "note": "sem tomate",
+        "additions": []
+      }
+    ],
+    "delivery": {
+      "city": "São Bento",
+      "fee": 4,
+      "address": "Rua Teste, 1"
+    },
+    "payment": "Pix",
+    "notes": "teste",
+    "total": 14
+  }
+]
