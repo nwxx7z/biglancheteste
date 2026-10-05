@@ -120,7 +120,8 @@ function normalize(x = {}) {
     },
     payment: String(x.payment || "").slice(0, 80),
     notes: String(x.notes || "").slice(0, 1000),
-    total: Math.max(0, Number(x.total) || 0)
+    total: Math.max(0, Number(x.total) || 0),
+    customerPhone: String(x.customerPhone || x.customer_phone || "").replace(/\\D/g, "").slice(0, 20)
   };
 }
 
