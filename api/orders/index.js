@@ -1,4 +1,5 @@
 const { getSql, cors, send, normalize, makeId, requireKitchenAuth } = require("../_lib");
+const { notifyOwner } = require("../_whatsapp");
 
 function brasiliaMinutes() {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -10,24 +11,39 @@ function brasiliaMinutes() {
 
   const h = Number(parts.find(p => p.type === "hour")?.value || 0);
   const m = Number(parts.find(p => p.type === "minute")?.value || 0);
-
   return h * 60 + m;
 }
 
 function automaticOpen() {
   const now = brasiliaMinutes();
+  return now >= (17 * 60 + 30) && now <= (23 * 60 + 45);
+}
 
-  // Horário automático oficial da loja: 17:30 até 23:45 (Brasília).
-  return now >= (17 * 60 + 30) &&
-         now <= (23 * 60 + 45);
+function selectFields() {
+  return `
+    id,
+    number,
+    status,
+    printed,
+    created_at AS "createdAt",
+    cart,
+    delivery,
+    payment,
+    notes,
+    total,
+    customer_phone AS "customerPhone",
+    whatsapp_message_id AS "whatsappMessageId",
+    whatsapp_status AS "whatsappStatus",
+    whatsapp_delivered_at AS "whatsappDeliveredAt",
+    whatsapp_customer_preparing_sent AS "whatsappCustomerPreparingSent",
+    whatsapp_customer_ready_sent AS "whatsappCustomerReadySent"
+  `;
 }
 
 module.exports = async function handler(req, res) {
   cors(res);
 
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
-  }
+  if (req.method === "OPTIONS") return res.status(204).end();
 
   try {
     const sql = getSql();
@@ -46,7 +62,13 @@ module.exports = async function handler(req, res) {
           delivery,
           payment,
           notes,
-          total
+          total,
+          customer_phone AS "customerPhone",
+          whatsapp_message_id AS "whatsappMessageId",
+          whatsapp_status AS "whatsappStatus",
+          whatsapp_delivered_at AS "whatsappDeliveredAt",
+          whatsapp_customer_preparing_sent AS "whatsappCustomerPreparingSent",
+          whatsapp_customer_ready_sent AS "whatsappCustomerReadySent"
         FROM orders
         ORDER BY created_at DESC
         LIMIT 100
@@ -56,8 +78,6 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === "POST") {
-
-      // Verifica se a loja está aberta
       const settingsRows = await sql`
         SELECT mode
         FROM store_settings
@@ -66,13 +86,11 @@ module.exports = async function handler(req, res) {
       `;
 
       const mode = String(settingsRows[0]?.mode || "auto");
-
-      const open =
-        mode === "open"
-          ? true
-          : mode === "closed"
-            ? false
-            : automaticOpen();
+      const open = mode === "open"
+        ? true
+        : mode === "closed"
+          ? false
+          : automaticOpen();
 
       if (!open) {
         return send(res, 403, {
@@ -86,12 +104,15 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      // Continua com a criação normal do pedido
       const data = normalize(req.body || {});
 
       if (!data.cart.length) {
+        return send(res, 400, { error: "Pedido vazio" });
+      }
+
+      if (!data.customerPhone) {
         return send(res, 400, {
-          error: "Pedido vazio"
+          error: "Informe seu WhatsApp para receber as atualizações do pedido."
         });
       }
 
@@ -113,18 +134,22 @@ module.exports = async function handler(req, res) {
           delivery,
           payment,
           notes,
-          total
+          total,
+          customer_phone,
+          whatsapp_status
         )
         VALUES (
           ${id},
           ${number},
-          'new',
+          'awaiting_whatsapp',
           false,
           ${JSON.stringify(data.cart)}::jsonb,
           ${JSON.stringify(data.delivery)}::jsonb,
           ${data.payment},
           ${data.notes},
-          ${data.total}
+          ${data.total},
+          ${data.customerPhone},
+          'pending'
         )
         RETURNING
           id,
@@ -136,19 +161,67 @@ module.exports = async function handler(req, res) {
           delivery,
           payment,
           notes,
-          total
+          total,
+          customer_phone AS "customerPhone",
+          whatsapp_message_id AS "whatsappMessageId",
+          whatsapp_status AS "whatsappStatus",
+          whatsapp_delivered_at AS "whatsappDeliveredAt"
       `;
 
-      return send(res, 201, rows[0]);
+      const order = rows[0];
+
+      try {
+        const wa = await notifyOwner(order);
+
+        if (wa.configured && wa.id) {
+          const updated = await sql`
+            UPDATE orders
+            SET
+              whatsapp_message_id = ${wa.id},
+              whatsapp_status = 'sent'
+            WHERE id = ${id}
+            RETURNING
+              id,
+              number,
+              status,
+              printed,
+              created_at AS "createdAt",
+              cart,
+              delivery,
+              payment,
+              notes,
+              total,
+              customer_phone AS "customerPhone",
+              whatsapp_message_id AS "whatsappMessageId",
+              whatsapp_status AS "whatsappStatus",
+              whatsapp_delivered_at AS "whatsappDeliveredAt"
+          `;
+          return send(res, 201, updated[0]);
+        }
+
+        return send(res, 201, {
+          ...order,
+          whatsappStatus: "not_configured",
+          whatsappWarning: "WhatsApp Cloud API ainda não está configurada. O pedido ficará aguardando e não será impresso."
+        });
+      } catch (error) {
+        await sql`
+          UPDATE orders
+          SET whatsapp_status = 'failed'
+          WHERE id = ${id}
+        `;
+
+        return send(res, 502, {
+          error: "Não foi possível enviar o pedido ao WhatsApp da lanchonete.",
+          detail: error.message,
+          orderNumber: number
+        });
+      }
     }
 
-    return send(res, 405, {
-      error: "Método não permitido"
-    });
-
+    return send(res, 405, { error: "Método não permitido" });
   } catch (error) {
     console.error(error);
-
     return send(res, 500, {
       error: "Erro interno",
       detail: error.message
