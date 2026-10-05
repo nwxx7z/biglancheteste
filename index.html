@@ -5149,6 +5149,15 @@ img,svg,video,canvas{max-width:100%}
   .cart-panel{width:calc(100vw - 4px)!important}
 }
 </style>
+<style id="customer-whatsapp">
+.customer-whatsapp-box{margin-top:12px;padding:14px;border:1px solid #80614e;border-radius:14px;background:#3b2b22}
+.customer-whatsapp-title{color:#fff4e8;font-weight:800;font-size:.95rem}
+.customer-whatsapp-subtitle{margin-top:4px;color:#ead8c8;font-size:.78rem;line-height:1.4}
+.customer-whatsapp-input{width:100%;margin-top:9px;min-height:46px;border:1px solid #987a64;border-radius:11px;padding:10px 12px;background:#2b211c;color:#fff2e8;font:600 .95rem "DM Sans",sans-serif}
+.customer-whatsapp-input::placeholder{color:#bda99a}
+.customer-whatsapp-input:focus{outline:none;border-color:#e0b78f;box-shadow:0 0 0 3px rgba(224,183,143,.16)}
+.customer-whatsapp-status{display:block;margin-top:6px;color:#b9d9bf;font-size:.72rem;font-weight:700}
+</style>
 <style id="delivery-location-dropdown">
 .cidade-opcao-sao-bento,.local-entrega{grid-column:1/-1}
 .local-entrega{display:grid;grid-template-rows:0fr;opacity:0;margin:0;visibility:hidden;pointer-events:none;transition:grid-template-rows .28s ease,opacity .2s ease,margin .28s ease,visibility .28s}
@@ -5448,6 +5457,12 @@ img,svg,video,canvas{max-width:100%}
         <textarea id="endereco-entrega" class="endereco-entrega" maxlength="320" required
           placeholder="Endereço e ponto de referência (rua, número, bairro, referência...)"
           aria-label="Endereço e ponto de referência (obrigatório para entrega)"></textarea>
+      </section>
+      <section class="customer-whatsapp-box" aria-label="WhatsApp do cliente">
+        <div class="customer-whatsapp-title">📱 Seu WhatsApp</div>
+        <div class="customer-whatsapp-subtitle">Usaremos este número para enviar atualizações do pedido. Ele ficará salvo neste aparelho para facilitar seus próximos pedidos.</div>
+        <input id="customer-whatsapp" class="customer-whatsapp-input" type="tel" inputmode="tel" autocomplete="tel" maxlength="16" placeholder="(82) 99999-9999" aria-label="Seu número de WhatsApp">
+        <small id="customer-whatsapp-status" class="customer-whatsapp-status" hidden>✓ Número salvo neste aparelho</small>
       </section>
       <section class="pagamento-box" aria-label="Forma de pagamento">
         <div class="pagamento-title">Forma de pagamento</div>
@@ -6273,6 +6288,7 @@ function pedidoParaCozinha(){
     },
     payment: pagamentoAtual(),
     notes: $("#obs").value.trim(),
+    customerPhone: normalizeCustomerPhone($("#customer-whatsapp")?.value || ""),
     total: total(),
     createdAt: new Date().toISOString()
   };
@@ -6300,25 +6316,58 @@ $("#enviar").addEventListener("click", async () => {
   }
   const button = $("#enviar");
   const originalText = button.textContent;
-  const wa = window.open("about:blank", "_blank");
   button.disabled = true;
   button.textContent = "Enviando pedido...";
   try {
     const orderNumber = await enviarPedidoParaCozinha();
-    const url = `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(mensagem(orderNumber))}`;
-    if (wa && !wa.closed) { wa.location.href = url; } else { window.location.href = url; }
+    salvarCustomerWhatsapp();
+    alert(`Pedido #${orderNumber} enviado! A lanchonete recebeu seu pedido pelo WhatsApp.\\n\\nVocê receberá as atualizações de preparo e entrega neste número.`);
   } catch (e) {
-    if (wa && !wa.closed) wa.close();
     alert(e.message || "Não foi possível enviar o pedido.");
   } finally {
     button.disabled = false;
     button.textContent = originalText;
   }
 });
+function normalizeCustomerPhone(value){
+  let p=String(value||"").replace(/\\D/g,"");
+  if(p.startsWith("55")) p=p.slice(2);
+  if(p.length===10||p.length===11) return "55"+p;
+  return "";
+}
+function customerWhatsappValido(){
+  return !!normalizeCustomerPhone($("#customer-whatsapp")?.value || "");
+}
+function salvarCustomerWhatsapp(){
+  const input=$("#customer-whatsapp");
+  const normalized=normalizeCustomerPhone(input?.value||"");
+  if(!normalized) return false;
+  try{localStorage.setItem("biglanche-customer-whatsapp",normalized.slice(2));}catch(e){}
+  const status=$("#customer-whatsapp-status");
+  if(status) status.hidden=false;
+  return true;
+}
+function carregarCustomerWhatsapp(){
+  const input=$("#customer-whatsapp");
+  if(!input) return;
+  let saved="";
+  try{saved=localStorage.getItem("biglanche-customer-whatsapp")||""}catch(e){}
+  if(saved){
+    const raw=saved.replace(/\\D/g,"");
+    if(raw.length===10||raw.length===11){
+      input.value=raw.length===11
+        ? `(${raw.slice(0,2)}) ${raw.slice(2,7)}-${raw.slice(7)}`
+        : `(${raw.slice(0,2)}) ${raw.slice(2,6)}-${raw.slice(6)}`;
+      const status=$("#customer-whatsapp-status");
+      if(status) status.hidden=false;
+    }
+  }
+}
 function atualizarCheckoutEntrega(){
   const entregaValida = entregaCompleta();
   const pagamentoValido = !!document.querySelector('input[name="pagamento"]:checked') && trocoValido();
-  const checkoutValido = entregaValida && pagamentoValido;
+  const whatsappValido = customerWhatsappValido();
+  const checkoutValido = entregaValida && pagamentoValido && whatsappValido;
   $("#enviar").disabled = !cart.length || !checkoutValido;
   $("#enviar").textContent = !cart.length
     ? "Escolha um item para enviar"
@@ -6328,7 +6377,9 @@ function atualizarCheckoutEntrega(){
         ? "Escolha a forma de pagamento"
         : !trocoValido()
           ? "Informe o valor do troco"
-          : `Enviar pelo WhatsApp · ${brl(total())}`;
+          : !whatsappValido
+            ? "Informe seu WhatsApp"
+            : `Enviar pedido · ${brl(total())}`;
   const totalEl = document.querySelector("#total");
   if (totalEl && cart.length){
     totalEl.textContent = entregaConsultarValor()
@@ -6354,8 +6405,12 @@ document.addEventListener("input", e => {
     const l = cart.find(x => x.u == note.dataset.noteU);
     if (l) l.note = note.value.slice(0, 300);
   }
-  if (e.target.matches("#endereco-entrega") || e.target.matches("#troco-valor")){
+  if (e.target.matches("#endereco-entrega") || e.target.matches("#troco-valor") || e.target.matches("#customer-whatsapp")){
     atualizarCheckoutEntrega();
+    if(e.target.matches("#customer-whatsapp")){
+      const status=$("#customer-whatsapp-status");
+      if(status) status.hidden=!customerWhatsappValido();
+    }
   }
 });
 function initPremiumReveal(){
@@ -6381,6 +6436,7 @@ function initPremiumReveal(){
 atualizarTrocoUI();
 atualizarLocalSaoBento();
 atualizarEnderecoRetirada();
+carregarCustomerWhatsapp();
 buildMenu(); refresh(); initPremiumReveal();
 // ===== LOCALIZAÇÃO =====
 const LOJA = {lat:-9.0586965, lng:-35.2420895};
