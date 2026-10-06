@@ -124,7 +124,16 @@ html[data-theme="dark"] .auth-screen{background:#171311!important}
 html[data-theme="dark"] .auth-card{background:#241c18!important;color:#f8eee5!important;border-color:#4a382e!important}
 html[data-theme="dark"] .auth-card p{color:#c7b7aa!important}
 html[data-theme="dark"] .auth-card input{background:#1b1512!important;color:#f8eee5!important;border-color:#4a382e!important}
-html[data-theme="dark"] .order-control{
+html[data-theme="dark"] .availability-panel{display:none;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:18px}
+.availability-panel.show{display:block}
+.availability-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+.availability-head strong{font-size:1.05rem}.availability-note{color:var(--muted);font-size:.82rem}
+.availability-group{margin-top:16px}.availability-group h3{margin:0 0 8px;font-size:.92rem}
+.availability-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line)}
+.availability-row:last-child{border-bottom:0}.availability-name{font-weight:700}.availability-state{font-size:.76rem;color:var(--muted);margin-top:2px}
+.availability-toggle{position:relative;width:48px;height:28px;flex:none;border:0;border-radius:999px;padding:0;background:#a6473d;cursor:pointer;transition:.18s}.availability-toggle::after{content:"";position:absolute;top:4px;left:4px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.18s}.availability-toggle.on{background:#4f7b5c}.availability-toggle.on::after{transform:translateX(20px)}.availability-toggle:disabled{opacity:.55;cursor:wait}
+html[data-theme="dark"] .availability-toggle{background:#6b3c37}html[data-theme="dark"] .availability-toggle.on{background:#477052}
+.order-control{
   border-color:#4b382c!important;background:#30231c!important;color:#fff1d6!important;
 }
 html[data-theme="dark"] #orderControlTitle{color:#fff1d6!important}
@@ -183,16 +192,16 @@ html[data-theme="dark"] .danger-action{color:#ffb5aa!important;border-color:#654
 <header><div class="head"><h1>🍔 BIG LANCHE · Cozinha</h1><div class="head-actions"><div class="status"><span id="dot" class="dot"></span><span id="status">Conectando...</span><button id="themeToggle" class="theme-toggle" type="button" aria-label="Claro" title="Claro"><span id="themeIcon">☀️</span><span id="themeLabel">Claro</span></button></div></div></div></header>
 <div class="tabs" role="tablist" aria-label="Pedidos">
   <button id="tabActive" class="tab active" type="button" role="tab" aria-selected="true">Pedidos <span id="countActive" class="tab-count">0</span></button>
-  <button id="tabReady" class="tab" type="button" role="tab" aria-selected="false">Prontos <span id="countReady" class="tab-count">0</span></button>
+  <button id="tabReady" class="tab" type="button" role="tab" aria-selected="false">Prontos <span id="countReady" class="tab-count">0</span></button>\n  <button id="tabAvailability" class="tab" type="button" role="tab" aria-selected="false">🍔 Disponibilidade</button>
 </div>
 <main>
 <div class="toolbar"><button id="autoPrintToggle" type="button" aria-pressed="true">⚡ Impressão automática: ON</button><button class="primary" id="connect">🖨️ Conectar impressora</button><button id="refresh">Atualizar</button><button id="logout">Sair</button></div>
 <div class="order-control" id="orderControl"><div class="order-control-info"><span class="order-control-kicker">Status dos pedidos</span><strong id="orderControlTitle">Automático</strong><small id="orderControlHint">17:30 às 23:45 · Brasília</small></div><div class="order-mode-buttons" role="group" aria-label="Controle de pedidos"><button type="button" class="order-mode active" data-order-mode="auto">◷ Automático</button><button type="button" class="order-mode" data-order-mode="open">Aberto</button><button type="button" class="order-mode" data-order-mode="closed">Fechado</button></div></div>
-<div id="orders" class="orders"><div class="empty">Nenhum pedido.</div></div>
+<div id="availabilityPanel" class="availability-panel" aria-live="polite"><div class="availability-head"><div><strong>Disponibilidade dos itens</strong><div class="availability-note">Desative um item quando estiver em falta. A alteração aparece no cardápio.</div></div><button id="refreshAvailability" type="button">Atualizar</button></div><div id="availabilityList"></div></div>\n<div id="orders" class="orders"><div class="empty">Nenhum pedido.</div></div>
 </main>
 <script>
 const API_URL=location.origin, PRINT_PRINTER="";
-let qzReady=false, orders=[], authenticated=false, currentTab="active";
+let qzReady=false, orders=[], authenticated=false, currentTab="active";\nlet availabilityItems=[];
 let autoPrintSeen=new Set();
 let autoPrintBusy=new Set();
 let autoPrintEnabled=true;
@@ -238,12 +247,18 @@ function pedidoTime(value){
 }
 function setTab(tab){
   currentTab=tab;
+  const availability=tab==="availability";
   const active=tab==="active";
   $("#tabActive").classList.toggle("active",active);
-  $("#tabReady").classList.toggle("active",!active);
+  $("#tabReady").classList.toggle("active",tab==="ready");
+  $("#tabAvailability").classList.toggle("active",availability);
   $("#tabActive").setAttribute("aria-selected",String(active));
-  $("#tabReady").setAttribute("aria-selected",String(!active));
-  render();
+  $("#tabReady").setAttribute("aria-selected",String(tab==="ready"));
+  $("#tabAvailability").setAttribute("aria-selected",String(availability));
+  $("#availabilityPanel").classList.toggle("show",availability);
+  $("#orders").classList.toggle("hidden",availability);
+  if(availability) loadAvailability();
+  else render();
 }
 function card(o){
   const items=(o.cart||[]).map(i=>{
@@ -279,6 +294,7 @@ function card(o){
   </article>`;
 }
 function render(){
+  if(currentTab==="availability") return;
   const activeOrders=orders.filter(o=>o.status!=="ready");
   const readyOrders=orders.filter(o=>o.status==="ready");
   $("#countActive").textContent=activeOrders.length;
@@ -287,6 +303,44 @@ function render(){
   $("#orders").innerHTML=list.length
     ? list.slice().sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt)).reverse().map(card).join("")
     : `<div class="empty">${currentTab==="ready"?"Nenhum pedido pronto.":"Nenhum pedido em andamento."}</div>`;
+}
+async function loadAvailability(){
+  try{
+    const data=await api("/api/menu-availability");
+    availabilityItems=Array.isArray(data.items)?data.items:[];
+    renderAvailability();
+  }catch(e){
+    if(e.message!=="AUTH_REQUIRED") alert("Não foi possível carregar a disponibilidade: "+e.message);
+  }
+}
+function renderAvailability(){
+  const groups=new Map();
+  for(const item of availabilityItems){
+    if(!groups.has(item.category)) groups.set(item.category,[]);
+    groups.get(item.category).push(item);
+  }
+  $("#availabilityList").innerHTML=[...groups.entries()].map(([category,items])=>`
+    <section class="availability-group">
+      <h3>${esc(category)}</h3>
+      ${items.map(item=>`
+        <div class="availability-row">
+          <div><div class="availability-name">${esc(item.name)}</div><div class="availability-state">${item.available?"Disponível":"Indisponível"}</div></div>
+          <button class="availability-toggle ${item.available?"on":""}" type="button" data-availability-key="${esc(item.key)}" aria-pressed="${String(!!item.available)}" aria-label="${item.available?"Desativar":"Ativar"} ${esc(item.name)}"></button>
+        </div>`).join("")}
+    </section>`).join("");
+}
+async function setAvailability(key,available,button){
+  if(button) button.disabled=true;
+  try{
+    const saved=await api("/api/menu-availability",{method:"PATCH",body:JSON.stringify({key,available})});
+    const item=availabilityItems.find(x=>x.key===key);
+    if(item){item.available=!!saved.available}
+    renderAvailability();
+  }catch(e){
+    if(e.message!=="AUTH_REQUIRED") alert("Não foi possível alterar a disponibilidade: "+e.message);
+  }finally{
+    if(button) button.disabled=false;
+  }
 }
 function receipt(o){const line="-".repeat(42),a=["\x1B\x40","\x1B\x61\x01","\x1B\x45\x01","BIG LANCHE","PEDIDO #"+o.number,"\x1B\x45\x00",line,"\x1B\x61\x00"];for(const i of o.cart||[]){a.push(`${i.quantity}x ${printSafe(i.name)}`);for(const x of i.additions||[])a.push(`   + ${x.quantity||1}x ${printSafe(x.name)}`);if(i.note)a.push(`   OBS: ${printSafe(i.note)}`)}a.push(line,`Entrega: ${printSafe(o.delivery?.city)} ${o.delivery?.fee?money(o.delivery.fee):""}`,`Endereco: ${printSafe(o.delivery?.address)}`,`Pagamento: ${printSafe(o.payment)}`,o.notes?`Obs: ${printSafe(o.notes)}`:"",`TOTAL: ${money(o.total)}`,"","","","\x1D\x56\x00");return a.join("\n");}
 async function printOrder(id,automatic=false){
@@ -355,7 +409,7 @@ async function load(){try{
     }
   }
 }catch{status("Servidor offline");}}
-$("#connect").onclick=connectPrinter;$("#refresh").onclick=load;$("#logout").onclick=doLogout;$("#autoPrintToggle").onclick=toggleAutoPrint;document.querySelectorAll("[data-order-mode]").forEach(b=>b.addEventListener("click",()=>setOrderMode(b.dataset.orderMode)));loadAutoPrintSetting();$("#loginForm").addEventListener("submit",async e=>{e.preventDefault();const b=$("#loginForm button");const p=$("#loginPassword").value.trim();if(!p)return;$("#loginError").textContent="";b.disabled=true;try{await doLogin(p);$("#loginPassword").value=""}catch(err){$("#loginError").textContent=err.message||"Senha incorreta";$("#loginPassword").select()}finally{b.disabled=false}});checkAuth().then(ok=>{if(ok){load();loadOrderMode();startOrderModePolling()}});setInterval(()=>{if(authenticated)load()},15000);$("#tabActive").onclick=()=>setTab("active");$("#tabReady").onclick=()=>setTab("ready");
+$("#connect").onclick=connectPrinter;$("#refresh").onclick=load;$("#logout").onclick=doLogout;$("#autoPrintToggle").onclick=toggleAutoPrint;$("#refreshAvailability").onclick=loadAvailability;$("#tabAvailability").onclick=()=>setTab("availability");document.querySelectorAll("[data-order-mode]").forEach(b=>b.addEventListener("click",()=>setOrderMode(b.dataset.orderMode)));\ndocument.addEventListener("click",e=>{const b=e.target.closest("[data-availability-key]");if(!b)return;setAvailability(b.dataset.availabilityKey,b.getAttribute("aria-pressed")!=="true",b)});loadAutoPrintSetting();$("#loginForm").addEventListener("submit",async e=>{e.preventDefault();const b=$("#loginForm button");const p=$("#loginPassword").value.trim();if(!p)return;$("#loginError").textContent="";b.disabled=true;try{await doLogin(p);$("#loginPassword").value=""}catch(err){$("#loginError").textContent=err.message||"Senha incorreta";$("#loginPassword").select()}finally{b.disabled=false}});checkAuth().then(ok=>{if(ok){load();loadOrderMode();startOrderModePolling()}});setInterval(()=>{if(authenticated)load()},15000);$("#tabActive").onclick=()=>setTab("active");$("#tabReady").onclick=()=>setTab("ready");
 </script>
 </div><script>
 (function(){
