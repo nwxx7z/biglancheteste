@@ -110,6 +110,19 @@ module.exports = async function handler(req, res) {
         return send(res, 400, { error: "Pedido vazio" });
       }
 
+      const unavailableRows = await sql`
+        SELECT item_key
+        FROM menu_availability
+        WHERE available = FALSE
+          AND item_key = ANY(${data.cart.map(item => item.name)}::text[])
+      `;
+      if (unavailableRows.length) {
+        return send(res, 409, {
+          error: "Um ou mais itens escolhidos ficaram indisponíveis.",
+          unavailableItems: unavailableRows.map(row => row.item_key)
+        });
+      }
+
       if (!data.customerPhone) {
         return send(res, 400, {
           error: "Informe seu WhatsApp para receber as atualizações do pedido."
