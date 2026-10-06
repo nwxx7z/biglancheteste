@@ -201,7 +201,8 @@ html[data-theme="dark"] .danger-action{color:#ffb5aa!important;border-color:#654
 </main>
 <script>
 const API_URL=location.origin, PRINT_PRINTER="";
-let qzReady=false, orders=[], authenticated=false, currentTab="active";\nlet availabilityItems=[];
+let qzReady=false, orders=[], authenticated=false, currentTab="active";
+let availabilityItems=[];
 let autoPrintSeen=new Set();
 let autoPrintBusy=new Set();
 let autoPrintEnabled=true;
@@ -409,7 +410,8 @@ async function load(){try{
     }
   }
 }catch{status("Servidor offline");}}
-$("#connect").onclick=connectPrinter;$("#refresh").onclick=load;$("#logout").onclick=doLogout;$("#autoPrintToggle").onclick=toggleAutoPrint;$("#refreshAvailability").onclick=loadAvailability;$("#tabAvailability").onclick=()=>setTab("availability");document.querySelectorAll("[data-order-mode]").forEach(b=>b.addEventListener("click",()=>setOrderMode(b.dataset.orderMode)));\ndocument.addEventListener("click",e=>{const b=e.target.closest("[data-availability-key]");if(!b)return;setAvailability(b.dataset.availabilityKey,b.getAttribute("aria-pressed")!=="true",b)});loadAutoPrintSetting();$("#loginForm").addEventListener("submit",async e=>{e.preventDefault();const b=$("#loginForm button");const p=$("#loginPassword").value.trim();if(!p)return;$("#loginError").textContent="";b.disabled=true;try{await doLogin(p);$("#loginPassword").value=""}catch(err){$("#loginError").textContent=err.message||"Senha incorreta";$("#loginPassword").select()}finally{b.disabled=false}});checkAuth().then(ok=>{if(ok){load();loadOrderMode();startOrderModePolling()}});setInterval(()=>{if(authenticated)load()},15000);$("#tabActive").onclick=()=>setTab("active");$("#tabReady").onclick=()=>setTab("ready");
+$("#connect").onclick=connectPrinter;$("#refresh").onclick=load;$("#logout").onclick=doLogout;$("#autoPrintToggle").onclick=toggleAutoPrint;$("#refreshAvailability").onclick=loadAvailability;$("#tabAvailability").onclick=()=>setTab("availability");document.querySelectorAll("[data-order-mode]").forEach(b=>b.addEventListener("click",()=>setOrderMode(b.dataset.orderMode)));
+document.addEventListener("click",e=>{const b=e.target.closest("[data-availability-key]");if(!b)return;setAvailability(b.dataset.availabilityKey,b.getAttribute("aria-pressed")!=="true",b)});loadAutoPrintSetting();$("#loginForm").addEventListener("submit",async e=>{e.preventDefault();const b=$("#loginForm button");const p=$("#loginPassword").value.trim();if(!p)return;$("#loginError").textContent="";b.disabled=true;try{await doLogin(p);$("#loginPassword").value=""}catch(err){$("#loginError").textContent=err.message||"Senha incorreta";$("#loginPassword").select()}finally{b.disabled=false}});checkAuth().then(ok=>{if(ok){load();loadOrderMode();startOrderModePolling()}});setInterval(()=>{if(authenticated)load()},15000);$("#tabActive").onclick=()=>setTab("active");$("#tabReady").onclick=()=>setTab("ready");
 </script>
 </div><script>
 (function(){
