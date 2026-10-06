@@ -178,16 +178,8 @@ html[data-theme="dark"] .danger-action{color:#ffb5aa!important;border-color:#654
 }
 </style></head>
 <body>
-<div id="loginScreen" class="auth-screen">
-  <form id="loginForm" class="auth-card">
-    <h2>🔒 Acesso da cozinha</h2>
-    <p>Digite a senha para abrir o painel de pedidos.</p>
-    <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Senha" required>
-    <button class="primary" type="submit">Entrar</button>
-    <p id="loginError" class="auth-error"></p>
-  </form>
-</div>
-<div id="app" class="hidden">
+<div id="loginScreen" class="auth-screen hidden"></div>
+<div id="app">
 
 <header><div class="head"><h1>🍔 BIG LANCHE · Cozinha</h1><div class="head-actions"><div class="status"><span id="dot" class="dot"></span><span id="status">Conectando...</span><button id="themeToggle" class="theme-toggle" type="button" aria-label="Claro" title="Claro"><span id="themeIcon">☀️</span><span id="themeLabel">Claro</span></button></div></div></div></header>
 <div class="tabs" role="tablist" aria-label="Pedidos">
@@ -214,12 +206,12 @@ const money=v=>Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"B
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 const printSafe=s=>String(s??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\x20-\x7E\n\r]/g,"");
 function status(t,ok=false){$("#status").textContent=t;$("#dot").className="dot "+(ok?"ok":"");}
-function showLogin(message=""){authenticated=false;$("#app").classList.add("hidden");$("#loginScreen").classList.remove("hidden");$("#loginError").textContent=message;setTimeout(()=>$("#loginPassword").focus(),0)}
+function showLogin(message=""){authenticated=true;$("#loginScreen").classList.add("hidden");$("#app").classList.remove("hidden")}
 function showApp(){authenticated=true;$("#loginScreen").classList.add("hidden");$("#app").classList.remove("hidden")}
-async function api(p,o={}){const r=await fetch(API_URL+p,{cache:"no-store",credentials:"same-origin",...o,headers:{"Content-Type":"application/json",...(o.headers||{})}});if(r.status===401){showLogin("Sua sessão expirou. Entre novamente.");throw Error("AUTH_REQUIRED")}if(!r.ok)throw Error(await r.text());return r.json();}
-async function checkAuth(){try{const r=await fetch(API_URL+"/api/auth",{cache:"no-store",credentials:"same-origin"});if(r.ok){showApp();return true}}catch(e){}showLogin();return false}
-async function doLogin(password){const r=await fetch(API_URL+"/api/auth",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({password})});if(!r.ok){let msg="Senha incorreta";try{msg=(await r.json()).error||msg}catch(e){}throw Error(msg)}showApp();await load();}
-async function doLogout(){try{await fetch(API_URL+"/api/auth",{method:"DELETE",credentials:"same-origin"})}catch(e){}showLogin();}
+async function api(p,o={}){const r=await fetch(API_URL+p,{cache:"no-store",credentials:"same-origin",...o,headers:{"Content-Type":"application/json",...(o.headers||{})}});if(!r.ok)throw Error(await r.text());return r.json();}
+async function checkAuth(){showApp();return true}
+async function doLogin(password){showApp();await load();}
+async function doLogout(){showApp();}
 async function connectPrinter(){
   try{
     if(window.BIGLANCHE_PRINTER.available()){
