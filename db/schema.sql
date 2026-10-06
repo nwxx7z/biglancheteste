@@ -21,3 +21,11 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS whatsapp_customer_preparing_sent BOO
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS whatsapp_customer_ready_sent BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE INDEX IF NOT EXISTS orders_whatsapp_message_id_idx ON orders (whatsapp_message_id);
+
+-- Disponibilidade dos itens do cardápio
+CREATE TABLE IF NOT EXISTS menu_availability (
+  item_key TEXT PRIMARY KEY,
+  category TEXT NOT NULL DEFAULT '',
+  available BOOLEAN NOT NULL DEFAULT TRUE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
